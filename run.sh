@@ -1,2 +1,2 @@
 make -j
-./build/zkProver -c ./poc_config/generate_input_file.json
+./build/zkProver -c ./poc_config/config_generate_input_file.json
