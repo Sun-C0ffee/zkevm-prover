@@ -24,7 +24,7 @@
     "runSHA256Test": false,
     "runBlakeTest": false,
 
-    "executeInParallel": false,
+    "executeInParallel": true,
     "useMainExecGenerated": true,
     "saveRequestToFile": false,
     "saveInputToFile": false,
