@@ -491,186 +491,22 @@ zkresult Smt::set (const string &batchUUID, uint64_t tx, Database &db, const Gol
         // Setting a value=0 in an existing key, i.e. deleting
         if ( bFoundKey && fr.equal(key[0], foundKey[0]) && fr.equal(key[1], foundKey[1]) && fr.equal(key[2], foundKey[2]) && fr.equal(key[3], foundKey[3]) ) // Delete
         {
-            oldValue = foundValue;
-
             // If level > 0, we are going to delete and existing node (not the root node)
             if ( level >= 0)
             {
-                // Set the hash of the deleted node to zero
-                if (bUseStateManager)
+                cout << "FOUND DELETE" << endl;
+                mode = "zeroToZero";
+                if (bFoundKey)
                 {
-                    for (uint64_t j=0; j<4; j++)
-                    {
-                        nodeToDelete[j] = siblings[level][keys[level]*4 + j];
-                        siblings[level][keys[level]*4 + j] = fr.zero();
-                    }
-                    nodeToDeleteString = fea2string(fr, nodeToDelete);
-                    if (nodeToDeleteString != "0")
-                    {
-                        stateManager.deleteNode(batchUUID, tx, nodeToDeleteString, persistence);
-                    }
-                }
-                else
-                {
-                    for (uint64_t j=0; j<4; j++)
-                    {
-                        siblings[level][keys[level]*4 + j] = fr.zero();
-                    }
-                }
-
-                // Find if there is only one non-zero hash in the siblings list for this level
-                int64_t uKey = getUniqueSibling(siblings[level]);
-
-                // If there is only one, it is the new deleted one
-                if (uKey >= 0)
-                {
-                    mode = "deleteFound";
-#ifdef LOG_SMT
-                    zklog.info("Smt::set() mode=" + mode);
-#endif
-                    // Calculate the key of the deleted element
-                    Goldilocks::Element auxFea[4];
-                    for (uint64_t i=0; i<4; i++) auxFea[i] = siblings[level][uKey*4+i];
-                    string auxString = fea2string(fr, auxFea);
-
-                    // Read its 2 siblings
-                    dbres = ZKR_UNSPECIFIED;
-                    if (bUseStateManager)
-                    {
-                        dbres = stateManager.read(batchUUID, auxString, dbValue, dbReadLog);
-                    }
-                    if (dbres != ZKR_SUCCESS)
-                    {
-                        dbres = db.read(auxString, auxFea, dbValue, dbReadLog, false, keys, level);
-                    }
-                    if ( dbres != ZKR_SUCCESS)
-                    {
-                        zklog.error("Smt::set() db.read error: " + to_string(dbres) + " (" + zkresult2string(dbres) + ") root:" + auxString);
-                        return dbres;
-                    }
-
-                    // Store them in siblings
-                    siblings[level+1] = dbValue;
-
-                    // If it is a leaf node
-                    if ( siblings[level+1].size()>8 && fr.equal( siblings[level+1][8], fr.one() ) )
-                    {
-                        // Calculate the value hash
-                        Goldilocks::Element valH[4];
-                        for (uint64_t i=0; i<4; i++) valH[i] = siblings[level+1][4+i];
-                        string valHString = fea2string(fr, valH);
-
-                        // Read its siblings
-                        dbres = ZKR_UNSPECIFIED;
-                        if (bUseStateManager)
-                        {
-                            dbres = stateManager.read(batchUUID, valHString, dbValue, dbReadLog);
-                        }
-                        if (dbres != ZKR_SUCCESS)
-                        {
-                            dbres = db.read(valHString, valH, dbValue, dbReadLog);
-                        }
-                        if (dbres != ZKR_SUCCESS)
-                        {
-                            zklog.error("Smt::set() db.read error: " + to_string(dbres) + " (" + zkresult2string(dbres) + ") root:" + valHString);
-                            return dbres;
-                        }
-                        else if (dbValue.size()<8)
-                        {
-                            zklog.error("Smt::set() dbValue.size()<8 root:" + valHString);
-                            return ZKR_SMT_INVALID_DATA_SIZE;
-                        }
-
-                        // Store the value as a scalar in val
-                        Goldilocks::Element valA[8];
-                        for (uint64_t i=0; i<8; i++) valA[i] = dbValue[i];
-                        mpz_class val;
-                        fea2scalar(fr, val, valA);
-
-                        // Increment the counter
-                        proofHashCounter += 2;
-
-                        // Store the key in rKey
-                        Goldilocks::Element rKey[4];
-                        for (uint64_t i=0; i<4; i++) rKey[i] = siblings[level+1][i];
-
-                        // Calculate the insKey
-                        vector<uint64_t> auxBits;
-                        auxBits = accKey;
-                        auxBits.push_back(uKey);
-                        joinKey(fr, auxBits, rKey, insKey );
-
-                        insValue = val;
-                        isOld0 = false;
-
-                        // Climb the branch until there are two siblings
-                        while (uKey>=0 && level>=0)
-                        {
-                            level--;
-                            if (level >= 0)
-                            {
-                                uKey = getUniqueSibling(siblings[level]);
-                            }
-                        }
-
-                        // Calculate the old remaining key
-                        Goldilocks::Element oldKey[4];
-                        removeKeyBits(fr, insKey, level+1, oldKey);
-
-                        // Create the old leaf node
-                        Goldilocks::Element a[8];
-                        for (uint64_t i=0; i<4; i++) a[i] = oldKey[i];
-                        for (uint64_t i=0; i<4; i++) a[4+i] = valH[i];
-
-                        // Create leaf node and store computed hash in oldLeafHash
-                        Goldilocks::Element oldLeafHash[4];
-                        dbres = hashSaveOne(ctx, a, oldLeafHash);
-                        if (dbres != ZKR_SUCCESS)
-                        {
-                            return dbres;
-                        }
-
-                        // Increment the counter
-                        proofHashCounter += 1;
-
-                        // If not root node, store the oldLeafHash in the sibling based on key bit
-                        if (level >= 0)
-                        {
-                            for (uint64_t j=0; j< 4; j++)
-                            {
-                                siblings[level][keys[level]*4 + j] = oldLeafHash[j];
-                            }
-                        }
-                        // If we are at the top of the tree, then update new root
-                        else
-                        {
-                            newRoot[0] = oldLeafHash[0];
-                            newRoot[1] = oldLeafHash[1];
-                            newRoot[2] = oldLeafHash[2];
-                            newRoot[3] = oldLeafHash[3];
-                        }
-                    }
-                    // Not a leaf node
-                    else
-                    {
-                        mode = "deleteNotFound";
-#ifdef LOG_SMT
-                        zklog.info("Smt::set() mode=" + mode);
-#endif
-                    }
-                }
-                // 2 siblings found
-                else
-                {
-                    mode = "deleteNotFound";
-#ifdef LOG_SMT
-                    zklog.info("Smt::set() mode=" + mode);
-#endif
+                    for (uint64_t i=0; i<4; i++) insKey[i] = foundKey[i];
+                    insValue = foundValue;
+                    isOld0 = false;
                 }
             }
             // If level=0, this means we are deleting the root node
             else
             {
+                oldValue = foundValue;
                 mode = "deleteLast";
 #ifdef LOG_SMT
                 zklog.info("Smt::set() mode=" + mode);
