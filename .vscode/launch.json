@@ -6,7 +6,7 @@
           "type": "cppdbg",
           "request": "launch",
           "program": "${workspaceFolder}/build/zkProver",
-          "args": [],
+          "args": ["-c", "/root/zkevm-prover/poc_config/config_generate_input_file.json"],
           "stopAtEntry": false,
           "cwd": "${workspaceFolder}",
           "environment": [],
