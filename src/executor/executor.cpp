@@ -439,11 +439,11 @@ void Executor::execute (ProverRequest &proverRequest, PROVER_FORK_NAMESPACE::Com
         TimerStart(MAIN_EXECUTOR_EXECUTE);
         if (config.useMainExecGenerated)
         {
-            PROVER_FORK_NAMESPACE::main_exec_generated(mainExecutor_fork_6, proverRequest, commitPols.Main, required);
+            PROVER_FORK_NAMESPACE::main_exec_generated(mainExecutor_fork_5, proverRequest, commitPols.Main, required);
         }
         else
         {
-            mainExecutor_fork_6.execute(proverRequest, commitPols.Main, required);
+            mainExecutor_fork_5.execute(proverRequest, commitPols.Main, required);
         }
             
         // Save input to <timestamp>.input.json after execution including dbReadLog
