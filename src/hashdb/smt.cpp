@@ -6,6 +6,7 @@
 #include "zklog.hpp"
 #include <bitset>
 #include "state_manager.hpp"
+#include "key_utils.hpp"
 
 zkresult Smt::set (const string &batchUUID, uint64_t tx, Database &db, const Goldilocks::Element (&oldRoot)[4], const Goldilocks::Element (&key)[4], const mpz_class &value, const Persistence persistence, SmtSetResult &result, DatabaseMap *dbReadLog)
 {
@@ -29,7 +30,7 @@ zkresult Smt::set (const string &batchUUID, uint64_t tx, Database &db, const Gol
 
     // Get a list of the bits of the key to navigate top-down through the tree
     bool keys[256];
-    splitKey(key, keys);
+    splitKey(fr, key, keys);
 
     int64_t level = 0;
     uint64_t proofHashCounter = 0;
@@ -132,7 +133,7 @@ zkresult Smt::set (const string &batchUUID, uint64_t tx, Database &db, const Gol
             foundRKey[3] = siblings[level][3];
 
             // Joining the consumed key bits, we have the complete found key of the old value
-            joinKey(accKey, foundRKey, foundKey);
+            joinKey(fr, accKey, foundRKey, foundKey);
             bFoundKey = true;
 
 #ifdef LOG_SMT
@@ -266,14 +267,14 @@ zkresult Smt::set (const string &batchUUID, uint64_t tx, Database &db, const Gol
 
                 // Split the found key in bits
                 bool foundKeys[256];
-                splitKey(foundKey, foundKeys);
+                splitKey(fr, foundKey, foundKeys);
 
                 // While the key bits are the same, increase the level; we want to find the first bit when the keys differ
                 while (keys[level2] == foundKeys[level2]) level2++;
 
                 // Store the key of the old value at the new level
                 Goldilocks::Element oldKey[4];
-                removeKeyBits(foundKey, level2+1, oldKey);
+                removeKeyBits(fr, foundKey, level2+1, oldKey);
 
                 // Insert a new leaf node for the old value, and store the hash in oldLeafHash
 
@@ -306,7 +307,7 @@ zkresult Smt::set (const string &batchUUID, uint64_t tx, Database &db, const Gol
 
                 // Calculate the key of the new leaf node of the new value
                 Goldilocks::Element newKey[4];
-                removeKeyBits(key, level2 + 1, newKey);
+                removeKeyBits(fr, key, level2 + 1, newKey);
 
                 // Convert the value scalar to an array of field elements
                 Goldilocks::Element valueFea[8];
@@ -416,7 +417,7 @@ zkresult Smt::set (const string &batchUUID, uint64_t tx, Database &db, const Gol
 
             // Build the new remaining key
             Goldilocks::Element newKey[4];
-            removeKeyBits(key, level+1, newKey);
+            removeKeyBits(fr, key, level+1, newKey);
 
             // Convert the scalar value to an array of 8 field elements
             Goldilocks::Element valueFea[8];
@@ -490,186 +491,22 @@ zkresult Smt::set (const string &batchUUID, uint64_t tx, Database &db, const Gol
         // Setting a value=0 in an existing key, i.e. deleting
         if ( bFoundKey && fr.equal(key[0], foundKey[0]) && fr.equal(key[1], foundKey[1]) && fr.equal(key[2], foundKey[2]) && fr.equal(key[3], foundKey[3]) ) // Delete
         {
-            oldValue = foundValue;
-
             // If level > 0, we are going to delete and existing node (not the root node)
             if ( level >= 0)
             {
-                // Set the hash of the deleted node to zero
-                if (bUseStateManager)
+                cout << "FOUND DELETE" << endl;
+                mode = "zeroToZero";
+                if (bFoundKey)
                 {
-                    for (uint64_t j=0; j<4; j++)
-                    {
-                        nodeToDelete[j] = siblings[level][keys[level]*4 + j];
-                        siblings[level][keys[level]*4 + j] = fr.zero();
-                    }
-                    nodeToDeleteString = fea2string(fr, nodeToDelete);
-                    if (nodeToDeleteString != "0")
-                    {
-                        stateManager.deleteNode(batchUUID, tx, nodeToDeleteString, persistence);
-                    }
-                }
-                else
-                {
-                    for (uint64_t j=0; j<4; j++)
-                    {
-                        siblings[level][keys[level]*4 + j] = fr.zero();
-                    }
-                }
-
-                // Find if there is only one non-zero hash in the siblings list for this level
-                int64_t uKey = getUniqueSibling(siblings[level]);
-
-                // If there is only one, it is the new deleted one
-                if (uKey >= 0)
-                {
-                    mode = "deleteFound";
-#ifdef LOG_SMT
-                    zklog.info("Smt::set() mode=" + mode);
-#endif
-                    // Calculate the key of the deleted element
-                    Goldilocks::Element auxFea[4];
-                    for (uint64_t i=0; i<4; i++) auxFea[i] = siblings[level][uKey*4+i];
-                    string auxString = fea2string(fr, auxFea);
-
-                    // Read its 2 siblings
-                    dbres = ZKR_UNSPECIFIED;
-                    if (bUseStateManager)
-                    {
-                        dbres = stateManager.read(batchUUID, auxString, dbValue, dbReadLog);
-                    }
-                    if (dbres != ZKR_SUCCESS)
-                    {
-                        dbres = db.read(auxString, auxFea, dbValue, dbReadLog, false, keys, level);
-                    }
-                    if ( dbres != ZKR_SUCCESS)
-                    {
-                        zklog.error("Smt::set() db.read error: " + to_string(dbres) + " (" + zkresult2string(dbres) + ") root:" + auxString);
-                        return dbres;
-                    }
-
-                    // Store them in siblings
-                    siblings[level+1] = dbValue;
-
-                    // If it is a leaf node
-                    if ( siblings[level+1].size()>8 && fr.equal( siblings[level+1][8], fr.one() ) )
-                    {
-                        // Calculate the value hash
-                        Goldilocks::Element valH[4];
-                        for (uint64_t i=0; i<4; i++) valH[i] = siblings[level+1][4+i];
-                        string valHString = fea2string(fr, valH);
-
-                        // Read its siblings
-                        dbres = ZKR_UNSPECIFIED;
-                        if (bUseStateManager)
-                        {
-                            dbres = stateManager.read(batchUUID, valHString, dbValue, dbReadLog);
-                        }
-                        if (dbres != ZKR_SUCCESS)
-                        {
-                            dbres = db.read(valHString, valH, dbValue, dbReadLog);
-                        }
-                        if (dbres != ZKR_SUCCESS)
-                        {
-                            zklog.error("Smt::set() db.read error: " + to_string(dbres) + " (" + zkresult2string(dbres) + ") root:" + valHString);
-                            return dbres;
-                        }
-                        else if (dbValue.size()<8)
-                        {
-                            zklog.error("Smt::set() dbValue.size()<8 root:" + valHString);
-                            return ZKR_SMT_INVALID_DATA_SIZE;
-                        }
-
-                        // Store the value as a scalar in val
-                        Goldilocks::Element valA[8];
-                        for (uint64_t i=0; i<8; i++) valA[i] = dbValue[i];
-                        mpz_class val;
-                        fea2scalar(fr, val, valA);
-
-                        // Increment the counter
-                        proofHashCounter += 2;
-
-                        // Store the key in rKey
-                        Goldilocks::Element rKey[4];
-                        for (uint64_t i=0; i<4; i++) rKey[i] = siblings[level+1][i];
-
-                        // Calculate the insKey
-                        vector<uint64_t> auxBits;
-                        auxBits = accKey;
-                        auxBits.push_back(uKey);
-                        joinKey(auxBits, rKey, insKey );
-
-                        insValue = val;
-                        isOld0 = false;
-
-                        // Climb the branch until there are two siblings
-                        while (uKey>=0 && level>=0)
-                        {
-                            level--;
-                            if (level >= 0)
-                            {
-                                uKey = getUniqueSibling(siblings[level]);
-                            }
-                        }
-
-                        // Calculate the old remaining key
-                        Goldilocks::Element oldKey[4];
-                        removeKeyBits(insKey, level+1, oldKey);
-
-                        // Create the old leaf node
-                        Goldilocks::Element a[8];
-                        for (uint64_t i=0; i<4; i++) a[i] = oldKey[i];
-                        for (uint64_t i=0; i<4; i++) a[4+i] = valH[i];
-
-                        // Create leaf node and store computed hash in oldLeafHash
-                        Goldilocks::Element oldLeafHash[4];
-                        dbres = hashSaveOne(ctx, a, oldLeafHash);
-                        if (dbres != ZKR_SUCCESS)
-                        {
-                            return dbres;
-                        }
-
-                        // Increment the counter
-                        proofHashCounter += 1;
-
-                        // If not root node, store the oldLeafHash in the sibling based on key bit
-                        if (level >= 0)
-                        {
-                            for (uint64_t j=0; j< 4; j++)
-                            {
-                                siblings[level][keys[level]*4 + j] = oldLeafHash[j];
-                            }
-                        }
-                        // If we are at the top of the tree, then update new root
-                        else
-                        {
-                            newRoot[0] = oldLeafHash[0];
-                            newRoot[1] = oldLeafHash[1];
-                            newRoot[2] = oldLeafHash[2];
-                            newRoot[3] = oldLeafHash[3];
-                        }
-                    }
-                    // Not a leaf node
-                    else
-                    {
-                        mode = "deleteNotFound";
-#ifdef LOG_SMT
-                        zklog.info("Smt::set() mode=" + mode);
-#endif
-                    }
-                }
-                // 2 siblings found
-                else
-                {
-                    mode = "deleteNotFound";
-#ifdef LOG_SMT
-                    zklog.info("Smt::set() mode=" + mode);
-#endif
+                    for (uint64_t i=0; i<4; i++) insKey[i] = foundKey[i];
+                    insValue = foundValue;
+                    isOld0 = false;
                 }
             }
             // If level=0, this means we are deleting the root node
             else
             {
+                oldValue = foundValue;
                 mode = "deleteLast";
 #ifdef LOG_SMT
                 zklog.info("Smt::set() mode=" + mode);
@@ -817,7 +654,7 @@ zkresult Smt::get (const string &batchUUID, Database &db, const Goldilocks::Elem
 
     // Get a list of the bits of the key to navigate top-down through the tree
     bool keys[256];
-    splitKey(key, keys);
+    splitKey(fr, key, keys);
 
     uint64_t level = 0;
 
@@ -907,7 +744,7 @@ zkresult Smt::get (const string &batchUUID, Database &db, const Goldilocks::Elem
             fea2scalar(fr, foundValue, fea);
 
             // We construct the whole key of that value in the database, and we call it foundKey
-            joinKey(accKey, foundRKey, foundKey);
+            joinKey(fr, accKey, foundRKey, foundKey);
             bFoundKey = true;
 #ifdef LOG_SMT
             zklog.info("Smt::get() found at level=" + to_string(level) + " value/hash=" + fea2string(fr,valueHashFea) + " foundKey=" + fea2string(fr, foundKey) + " value=" + foundValue.get_str(16));
@@ -996,82 +833,6 @@ zkresult Smt::get (const string &batchUUID, Database &db, const Goldilocks::Elem
 #endif
 
     return ZKR_SUCCESS;
-}
-
-// Split the fe key into 4-bits chuncks, e.g. 0x123456EF -> { 1, 2, 3, 4, 5, 6, E, F }
-void Smt::splitKey( const Goldilocks::Element (&key)[4], bool (&result)[256])
-{
-    bitset<64> auxb0(fr.toU64(key[0]));
-    bitset<64> auxb1(fr.toU64(key[1]));
-    bitset<64> auxb2(fr.toU64(key[2]));
-    bitset<64> auxb3(fr.toU64(key[3]));
-    
-    // Split the key in bits, taking one bit from a different scalar every time
-    int cont = 0;
-    for (uint64_t i=0; i<64; i++)
-    {
-        result[cont] = auxb0[i];
-        result[cont+1] = auxb1[i];
-        result[cont+2] = auxb2[i];
-        result[cont+3] = auxb3[i];
-        cont+=4;
-    }
-}
-
-// Joins full key from remaining key and path already used
-// bits = key path used
-// rkey = remaining key
-// key = full key (returned)
-void Smt::joinKey ( const vector<uint64_t> &bits, const Goldilocks::Element (&rkey)[4], Goldilocks::Element (&key)[4] )
-{
-    uint64_t n[4] = {0, 0, 0, 0};
-    mpz_class accs[4] = {0, 0, 0, 0};
-    for (uint64_t i=0; i<bits.size(); i++)
-    {
-        if (bits[i])
-        {
-            accs[i%4] = (accs[i%4] | (mpz_class(1)<<n[i%4]))/*%fr.prime()*/;
-        }
-        n[i%4] += 1;
-    }
-    Goldilocks::Element auxk[4];
-    for (uint64_t i=0; i<4; i++) auxk[i] = rkey[i];
-    for (uint64_t i=0; i<4; i++)
-    {
-        mpz_class aux = fr.toU64(auxk[i]);
-        aux = ((aux<<n[i]) | accs[i])/*%mpz_class(fr.prime())*/;
-        auxk[i] = fr.fromU64(aux.get_ui());
-    }
-    for (uint64_t i=0; i<4; i++) key[i] = auxk[i];
-}
-
-/**
- * Removes bits from the key depending on the smt level
- * key -key
- * nBits - bits to remove
- * returns rkey - remaining key bits to store
- */
-void Smt::removeKeyBits ( const Goldilocks::Element (&key)[4], uint64_t nBits, Goldilocks::Element (&rkey)[4] )
-{
-    uint64_t fullLevels = nBits / 4;
-    mpz_class auxk[4];
-
-    for (uint64_t i=0; i<4; i++)
-    {
-        auxk[i] = fr.toU64(key[i]);
-    }
-
-    for (uint64_t i = 0; i < 4; i++)
-    {
-        uint64_t n = fullLevels;
-        if (fullLevels * 4 + i < nBits) n += 1;
-        auxk[i] = auxk[i] >> n;
-    }
-
-    for (uint64_t i=0; i<4; i++)
-    {
-        scalar2fe(fr, auxk[i], rkey[i]);
-    }
 }
 
 zkresult Smt::hashSave ( const SmtContext &ctx, const Goldilocks::Element (&v)[12], Goldilocks::Element (&hash)[4])

@@ -322,11 +322,13 @@ zkresult FullTracer::handleEvent(Context &ctx, const RomCommand &cmd)
     }
     if (cmd.params[0]->varName == "onFinishTx")
     {
+        /*
         if ( (oocErrors.find(lastError)==oocErrors.end()) && (ctx.totalTransferredBalance != 0) )
         {
             zklog.error("FullTracer::handleEvent(onFinishTx) found ctx.totalTransferredBalance=" + ctx.totalTransferredBalance.get_str(10));
             return ZKR_SM_MAIN_BALANCE_MISMATCH;
         }
+        */
         return onFinishTx(ctx, cmd);
     }
     if (cmd.params[0]->varName == "onStartBatch")
@@ -335,11 +337,13 @@ zkresult FullTracer::handleEvent(Context &ctx, const RomCommand &cmd)
     }
     if (cmd.params[0]->varName == "onFinishBatch")
     {
+        /*
         if ( (oocErrors.find(lastError)==oocErrors.end()) && (ctx.totalTransferredBalance != 0) )
         {
             zklog.error("FullTracer::handleEvent(onFinishBatch) found ctx.totalTransferredBalance=" + ctx.totalTransferredBalance.get_str(10));
             return ZKR_SM_MAIN_BALANCE_MISMATCH;
         }
+        */
         return onFinishBatch(ctx, cmd);
     }
     if (cmd.params[0]->function == f_onOpcode)
