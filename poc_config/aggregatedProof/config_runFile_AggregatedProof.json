@@ -60,7 +60,7 @@
     "mapConstantsTreeFile": false,
 
     "inputFile": "poc_config/batchProof/proofs/batch_proof.proof.json",
-    "inputFile2": "poc_config/batchProof/proofs/batch_proof.proof.json",
+    "inputFile2": "poc_config/batchProof/proofs/batch_proof2.proof.json",
 
     "outputPath": "runtime/output",
     "configPath": "config",
