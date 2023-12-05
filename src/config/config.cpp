@@ -115,10 +115,10 @@ void Config::load(json &config)
     proverID = getUUID();
 
     // Servers and clients
-    ParseBool(config, "runExecutorServer", "RUN_EXECUTOR_SERVER", runExecutorServer, true);
+    ParseBool(config, "runExecutorServer", "RUN_EXECUTOR_SERVER", runExecutorServer, false);
     ParseBool(config, "runExecutorClient", "RUN_EXECUTOR_CLIENT", runExecutorClient, false);
     ParseBool(config, "runExecutorClientMultithread", "RUN_EXECUTOR_CLIENT_MULTITHREAD", runExecutorClientMultithread, false);
-    ParseBool(config, "runHashDBServer", "RUN_HASHDB_SERVER", runHashDBServer, true);
+    ParseBool(config, "runHashDBServer", "RUN_HASHDB_SERVER", runHashDBServer, false);
     ParseBool(config, "runHashDBTest", "RUN_HASHDB_TEST", runHashDBTest, false);
     ParseBool(config, "runAggregatorServer", "RUN_AGGREGATOR_SERVER", runAggregatorServer, false);
     ParseBool(config, "runAggregatorClient", "RUN_AGGREGATOR_CLIENT", runAggregatorClient, false);
@@ -149,9 +149,9 @@ void Config::load(json &config)
     ParseBool(config, "runUnitTest", "RUN_UNIT_TEST", runUnitTest, false);
 
     // Main SM executor
-    ParseBool(config, "useMainExecGenerated", "USE_MAIN_EXEC_GENERATED", useMainExecGenerated, true);
+    ParseBool(config, "useMainExecGenerated", "USE_MAIN_EXEC_GENERATED", useMainExecGenerated, false);
     ParseBool(config, "useMainExecC", "USE_MAIN_EXEC_C", useMainExecC, false);
-    ParseBool(config, "executeInParallel", "EXECUTE_IN_PARALLEL", executeInParallel, true);
+    ParseBool(config, "executeInParallel", "EXECUTE_IN_PARALLEL", executeInParallel, false);
 
     // Save to file
     ParseBool(config, "saveDbReadsToFile", "SAVE_DB_READS_TO_FILE", saveDbReadsToFile, false);
@@ -205,7 +205,7 @@ void Config::load(json &config)
     ParseBool(config, "logExecutorServerInputJson", "LOG_EXECUTOR_SERVER_INPUT_JSON", logExecutorServerInputJson, false);
     ParseU64(config, "logExecutorServerInputGasThreshold", "LOG_EXECUTOR_SERVER_INPUT_GAS_THRESHOLD", logExecutorServerInputGasThreshold, 0);
     ParseBool(config, "logExecutorServerResponses", "LOG_EXECUTOR_SERVER_RESPONSES", logExecutorServerResponses, false);
-    ParseBool(config, "logExecutorServerTxs", "LOG_EXECUTOR_SERVER_TXS", logExecutorServerTxs, true);
+    ParseBool(config, "logExecutorServerTxs", "LOG_EXECUTOR_SERVER_TXS", logExecutorServerTxs, false);
     ParseBool(config, "dontLoadRomOffsets", "DONT_LOAD_ROM_OFFSETS", dontLoadRomOffsets, false);
 
     // Files and paths

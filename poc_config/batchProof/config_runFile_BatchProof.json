@@ -10,10 +10,10 @@
     "runAggregatorClient": false,
     "runAggregatorClientMock": false, 
     
-    "runFileGenBatchProof": true,
+    "runFileGenBatchProof": false,
     "runFileGenAggregatedProof": false,
     "runFileGenFinalProof": false,
-    "runFileProcessBatch": false,
+    "runFileProcessBatch": true,
     "runFileProcessBatchMultithread": false,
 
     "runKeccakScriptGenerator": false,
