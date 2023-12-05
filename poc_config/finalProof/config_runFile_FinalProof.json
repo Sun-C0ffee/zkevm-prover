@@ -59,7 +59,7 @@
     "mapConstPolsFile": false,
     "mapConstantsTreeFile": false,
 
-    "inputFile": "poc_config/batchProof/config_runFile_BatchProof.json",
+    "inputFile": "poc_config/aggregatedProof/proofs/batch_proof.proof.json",
 
     "outputPath": "runtime/output",
     "configPath": "config",
