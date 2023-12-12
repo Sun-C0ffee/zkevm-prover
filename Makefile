@@ -20,12 +20,8 @@ LDFLAGS := -lprotobuf -lsodium -lgpr -lpthread -lpqxx -lpq -lgmp -lstdc++ -lgmpx
 CFLAGS := -fopenmp
 ASFLAGS := -felf64
 
-# Debug build flags
-ifeq ($(dbg),1)
-      CXXFLAGS += -g -D DEBUG
-else
-      CXXFLAGS += -O3
-endif
+CXXFLAGS += -g -D DEBUG
+
 
 # Verify if AVX-512 is supported
 # for now disabled, to enable it, you only need to uncomment these lines
